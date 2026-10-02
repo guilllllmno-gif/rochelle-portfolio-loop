@@ -1,0 +1,13 @@
+GSAP 3.13.0 and MorphSVGPlugin 3.13.0
+Copyright 2025, GreenSock. All rights reserved.
+Author: Jack Doyle, jack@greensock.com
+https://gsap.com
+
+Distributed under the Standard "No Charge" GSAP License:
+https://gsap.com/standard-license/
+
+This portfolio uses GSAP and MorphSVGPlugin to animate its brand opening. Both distributions are bundled locally and embedded into the standalone HTML; no CDN request occurs at runtime. Original copyright and license notices remain intact in the vendor files.
+
+Pinned distribution sources:
+https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js
+https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/MorphSVGPlugin.min.js
