@@ -349,3 +349,16 @@ preview-brand-opening-sequence.jpg、preview-brand-hero-desktop.png、preview-br
 - preview-material-gallery-01.png、05.png、06.png、07.png、09.png：桌面画廊实景。
 - preview-accordion-desktop.png、preview-accordion-mobile.png：第六张桌面与手机效果。
 - preview-collage-artworks.jpg、preview-collage-project-desktop.png、preview-collage-case-desktop.png：素材与案例预览。
+
+十八、GitHub 在线部署（2026-10-02）
+- 在线网站：https://guilllllmno-gif.github.io/rochelle-portfolio-loop/
+- 公开源码仓库：https://github.com/guilllllmno-gif/rochelle-portfolio-loop
+- 新建独立公开仓库；原私有仓库 Rochelle-Portfolio 保持不变。
+- GitHub Pages 使用 GitHub Actions 发布，配置位于仓库根目录 .github/workflows/pages.yml。
+- main 分支每次推送后自动部署 rochelle-loop/ 中的静态网站，也可在 Actions 页面手动运行。
+- 修改网页时更新本目录中的 HTML、CSS、JavaScript 或 assets/ 素材，再提交并推送 main；无需安装 Node 或执行打包即可更新在线版本。
+- 若还需更新离线单文件，请在仓库根目录执行 python3 rochelle-loop/build.py，并一并提交生成的 Rochelle-Portfolio.html。线上部署不读取该单文件。
+- .gitignore 排除了本机 IDE 配置、系统缓存、Python 缓存和环境变量文件。
+- 已在真实线上地址检查 6 个主页面、1 个作品详情及 1 篇文章，分别使用 1365px 和 390px 宽度：未捕获页面脚本错误或 HTTP 400 及以上资源响应，检查页面的图片均成功解码，未检测到横向溢出。
+- 已查看桌面与手机首页，并实际点击手机菜单进入 Work 页面；不代表完成全部浏览器、真机或交互兼容性测试。
+- 本次仅配置发布，没有修改网页设计或接入后端。订阅、合作表单仍为本地演示，真实联系方式仍待配置。
