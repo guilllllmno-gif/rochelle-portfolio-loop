@@ -390,3 +390,15 @@ preview-brand-opening-sequence.jpg、preview-brand-hero-desktop.png、preview-br
 - 实际检查全部 SVG：无位图、外部资源或未转路径文字，内部图形引用完整。
 - 1568×798 桌面、390×844 手机逐张 01→08 并反向切换：计数正确、图片正常解码、无横向溢出或捕获到的页面脚本错误。
 - 手机点击第三张进入对应详情，返回恢复 03 / 08；减少动态效果模式完整展示八张。离线文件中的八张内嵌 SVG 均成功解码，人物卡片不再出现。
+
+二十一、Artivo 与 Agent Workspace 首页入口样式
+- 本轮仅调整项目入口：首页前两张分别展示 Artivo 与 Agent Workspace，总数保持八张；原来的两张概念作品仍在 Work 列表，十二篇概念详情和原始封面均未移除。
+- Artivo 使用浅紫与珊瑚橙的设计画布插画；Agent Workspace 使用深紫、浅紫与业务工作区插画。两张均为纯 SVG 几何图形，不是产品截图，也没有位图嵌入。
+- 项目名、简短定位和“查看项目”操作采用可选择的 HTML 文字，随卡片宽度缩放；其余六张保留原有文字精简后的 SVG。八张 SVG 合计 109,789 字节。
+- 两个入口为语义化按钮，点击显示项目简介和实际访问条件。简介复用已有弹窗的焦点约束、Escape 关闭和焦点返回逻辑；没有伪造完整案例、公开演示或免登录权限，也没有把 localhost 链接暴露给公开访客。
+- 页面保留原来的滚动画廊和作品导航。入口底部始终显示操作提示，不依赖悬停；这两张取消额外的跟随鼠标文字，避免重复提示。
+- 可通过 #/#selected-work 直接定位首页画廊。新对比预览为 preview-project-entrances.png；preview-entry-artivo-desktop.png、preview-entry-agent-desktop.png 及相应 mobile 文件来自实际页面。
+- preview-gallery-collection.jpg、preview-gallery-desktop.png、preview-gallery-mobile.png 同步更新。离线单文件已重新生成，共 116 个内嵌资源，无外部依赖。
+- 已检查 1568×900 桌面及 390×844 手机的两个入口、弹窗开关、键盘 Tab/Enter/Escape、焦点约束与返回，以及画廊 01/02/03/08 的切换。
+- 320×740 减少动态效果模式下八张完整展示，项目标题不溢出，入口箭头为 44×44 像素。Work 仍有十二个项目，原第一篇详情可正常进入。
+- 八张 SVG 均成功解析，无位图、脚本、SVG text 元素或外部链接；离线文件中八张 SVG 均解码成功，Artivo 简介可由入口打开。

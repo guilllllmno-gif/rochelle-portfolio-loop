@@ -40,7 +40,16 @@
     return asset(names[(project.index + index) % names.length]);
   }
   R.projects = entries.map((e, i) => ({ slug: e[0], title: e[1], brand: e[2], year: e[3], categories: e[4].map(n => R.categories[n]), cover: asset(e[5]), description: e[7], deliverable: e[6], mockup: e[8] ? mock(e[8]) : null, copy: e[9], sections: sequences[i].map((s, j) => ({ type: s[0], count: s[1] || 1, reverse: !!s[2], index: j })), index: i }));
-  R.featured = ['after-hours', 'form-field', 'soft-matter', 'blue-shift', 'orange-object', 'terrain', 'kinetic-type', 'echo'];
+  R.showcases = [
+    {slug:'artivo',brand:'Artivo',title:'Design workspace',subtitle:'私人设计工作空间',summary:'让想法，成为界面。一个需要管理员登录的私人设计工作空间。',access:'本地运行 · 管理员登录',note:'当前未提供公开演示地址。',kind:'project',index:0},
+    {slug:'agent-workspace',brand:'Agent Workspace',title:'Business workspace',subtitle:'业务工作区',summary:'一个独立部署、通过访问码授权的业务工作区。',access:'独立部署 · 访问码验证',note:'访问需要项目分享者提供的访问码。',kind:'project',index:1}
+  ];
+  R.featured = ['artivo', 'agent-workspace', 'soft-matter', 'blue-shift', 'orange-object', 'terrain', 'kinetic-type', 'echo'];
+  R.openShowcase = (slug, trigger) => {
+    const project = R.showcases.find(p => p.slug === slug);
+    if (!project || document.querySelector('.overlay')) return;
+    R.openDialog(`<p class="eyebrow">PROJECT / ${String(project.index + 1).padStart(2, '0')}</p><h2>${esc(project.brand)}</h2><p class="showcase-summary">${esc(project.summary)}</p><dl class="showcase-facts"><div><dt>项目类型</dt><dd>${esc(project.subtitle)}</dd></div><div><dt>访问方式</dt><dd>${esc(project.access)}</dd></div></dl><p>${esc(project.note)}</p><p class="showcase-art-note">封面为项目入口插画，并非产品界面截图。</p>`, {trigger, label:project.brand + ' 项目简介', className:'showcase-overlay'});
+  };
   const previewURL = () => R.previewSrc;
   R.projectCard = function (project) {
     return `<article class="project-card" data-project="${project.slug}"><a class="project-card-link" href="${R.link('/work/' + project.slug)}" aria-label="Explore ${esc(project.title)} concept study"><div class="project-card-media"><img class="project-cover" src="${project.cover}" alt="${esc(project.title)} — visual concept artwork, not a product screenshot" loading="lazy" decoding="async"><div class="project-preview"><video data-project-preview data-src="${previewURL()}" poster="${project.cover}" muted loop playsinline preload="none" aria-hidden="true" tabindex="-1"></video><span class="preview-caption">Concept motion</span></div><span class="project-view" aria-hidden="true">View ↗</span></div><div class="project-card-title"><h3>${esc(project.title)}</h3><span aria-hidden="true">↗</span></div><div class="project-card-meta"><span>${esc(project.brand)} · Concept study</span><span>${project.year}</span></div><p class="project-card-category">${esc(project.categories.join(' / '))}</p></a></article>`;

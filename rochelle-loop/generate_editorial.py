@@ -63,14 +63,14 @@ COVER_STUDIES = [
 
 # Homepage-only art; the shared Work and case-study covers remain unchanged.
 GALLERY_STUDIES = [
-    ('OPERATIONS', '#e0d7ed'),
-    ('STATUS SYSTEMS', '#f1ebdf'),
-    ('ISSUING', '#cab8dc'),
-    ('CASE REVIEW', '#f1c7b5'),
-    ('PAYMENTS', '#2b1630'),
-    ('WEB & MOBILE', '#dfd8e9'),
-    ('PAYMENT FLOWS', '#f5b994'),
-    ('WORKSPACE', '#32203b'),
+    ('Artivo', 'DESIGN WORKSPACE', '#e6dfeb'),
+    ('Agent Workspace', 'BUSINESS WORKSPACE', '#2b1630'),
+    ('Future Pay', 'ISSUING', '#cab8dc'),
+    ('Future Pay', 'CASE REVIEW', '#f1c7b5'),
+    ('Bit2Go', 'PAYMENTS', '#2b1630'),
+    ('Bit2Go', 'WEB & MOBILE', '#dfd8e9'),
+    ('Bit2Go', 'PAYMENT FLOWS', '#f5b994'),
+    ('Bit2Go', 'WORKSPACE', '#32203b'),
 ]
 
 
@@ -668,8 +668,7 @@ class Studio:
             self.vector_face = TTFont(BytesIO(data)), hb.Face(data)
         font, face = self.vector_face
         glyph_definitions = {}
-        discipline, background = GALLERY_STUDIES[n-1]
-        brand, _ = COVERS[n-1]
+        brand, discipline, background = GALLERY_STUDIES[n-1]
         ink, cream, coral, lilac, mint = '#2b1630', '#faf6ec', '#f47a50', '#c5b8e9', '#d9e5b5'
         foreground = cream if n in (5, 8) else ink
         identifiers = count()
@@ -735,55 +734,77 @@ class Studio:
             scene.path('M'+' L'.join(f'{x:.2f} {y:.2f}' for x, y in points)+' Z', color)
 
         if n == 1:
-            scene.ellipse((420, 0, 1020, 600), coral)
-            scene.ellipse((-180, 360, 580, 1120), stroke='#b5a4c8', width=2)
-            board = panel(730, 656)
-            text(board, (38, 35), 'Overview', 35)
-            for x in (614, 638, 662):
-                board.ellipse((x, 52, x+9, 61), '#baa9c5')
-            board.line([(38, 104), (692, 104)], '#e1d9d2', 2)
-            board.rect((38, 139, 326, 254), '#ece4f3', 20)
-            board.rect((346, 139, 692, 254), '#f4dac9', 20)
-            board.line([(62, 220), (110, 190), (160, 205), (209, 170), (285, 171)], '#8f76a6', 4)
-            board.line([(376, 215), (430, 209), (481, 176), (534, 189), (606, 161), (659, 172)], '#c37752', 4)
-            board.rect((38, 282, 468, 610), '#eee8f3', 20)
-            for index, height in enumerate((103, 156, 130, 213, 177, 254, 207)):
-                x = 67+index*54
-                board.rect((x, 575-height, x+32, 575), coral if index == 5 else '#a694bd', 9)
-            for index, color in enumerate((ink, coral, lilac)):
-                y = 306+index*103
-                board.ellipse((510, y, 552, y+42), color)
-                board.line([(575, y+12), (665, y+12)], '#b9acbd', 6)
-                board.line([(575, y+31), (634, y+31)], '#ddd4df', 6)
-            scene.place(board, (430, 433), 5)
-            note = panel(422, 176, ink)
-            note.ellipse((30, 34, 138, 142), stroke=lilac, width=12)
-            check(note, (61, 70), 44, mint, 7)
-            note.line([(184, 62), (323, 62)], cream, 9)
-            note.line([(184, 97), (272, 97)], '#9e86ad', 7)
-            arrow(note, (340, 113), 33, coral, 5)
-            scene.place(note, (557, 874), -7)
+            scene.ellipse((425, 90, 1015, 680), '#d1c4e3')
+            scene.ellipse((-140, 485, 565, 1190), stroke='#b6a3c5', width=2)
+            board = panel(730, 576)
+            for x, color in ((31, coral), (55, lilac), (79, mint)):
+                board.ellipse((x, 30, x+12, 42), color)
+            board.line([(30, 71), (700, 71)], '#ddd5df', 2)
+            board.rect((22, 92, 142, 553), '#eee8f3', 14)
+            for index, color in enumerate((ink, '#c9bcd7', '#c9bcd7', '#c9bcd7')):
+                y = 117+index*67
+                board.rect((39, y, 59, y+20), color, 5)
+                board.line([(72, y+10), (122, y+10)], color, 5)
+            board.rect((165, 92, 708, 553), '#eae5de', 14)
+            board.rect((190, 117, 477, 526), coral, 10)
+            board.path('M233 473 V293 A100 100 0 0 1 433 293 V473 Z', cream)
+            board.ellipse((271, 260, 397, 386), lilac)
+            board.line([(245, 160), (367, 160)], ink, 8)
+            board.line([(245, 182), (327, 182)], ink, 5)
+            board.rect((246, 448, 420, 483), ink, 17)
+            for index, color in enumerate((ink, lilac, mint, cream)):
+                board.ellipse((503+index*45, 126, 535+index*45, 158), color)
+            board.line([(507, 201), (657, 201)], '#ae9fba', 7)
+            board.line([(507, 225), (617, 225)], '#c7bacf', 5)
+            board.rect((502, 271, 682, 391), lilac, 12)
+            board.path('M550 359 L591 302 L633 359 Z', cream)
+            board.rect((502, 413, 682, 526), cream, 12)
+            board.ellipse((555, 434, 629, 508), coral)
+            scene.place(board, (448, 532), 5)
+            tile = panel(216, 188, ink, 28)
+            for x, y, color in ((37, 24, coral), (111, 24, lilac), (37, 98, mint), (111, 98, cream)):
+                tile.rect((x, y, x+68, y+68), color, 22)
+            scene.place(tile, (181, 866), -9)
+            scene.path('M617 769 L741 838 L688 855 L667 912 Z', coral, cream, 7)
+            spark(747, 323, 36, ink)
 
         elif n == 2:
-            scene.line([(210, 111), (690, 111), (690, 943), (210, 943)], '#ded3e5', 43)
-            states = [
-                ('Processing', lilac, ink, (410, 257), 7),
-                ('Completed', ink, cream, (480, 546), -5),
-                ('Review', coral, ink, (410, 833), 6),
-            ]
-            for index, (label, fill, color, center, angle) in enumerate(states):
-                item = panel(654, 188, fill, 42)
-                item.ellipse((33, 43, 135, 145), stroke=color, width=2)
-                if index == 0:
-                    item.path('M101 69 A30 30 0 1 0 106 113', stroke=color, width=6)
-                elif index == 1:
-                    check(item, (61, 76), 48, color, 6)
-                else:
-                    item.line([(84, 67), (84, 101)], color, 6)
-                    item.ellipse((80, 116, 88, 124), color)
-                text(item, (165, 61), label, 45, color)
-                scene.place(item, center, angle)
-            spark(756, 1020, 35, ink)
+            scene.ellipse((399, 104, 1009, 714), stroke='#604b6b', width=2)
+            scene.ellipse((-242, 525, 546, 1313), stroke='#4c3658', width=2)
+            scene.line([(695, 302), (695, 510), (535, 510)], '#957eab', 3)
+            board = panel(720, 466)
+            board.rect((27, 26, 61, 60), ink, 10)
+            board.ellipse((37, 36, 51, 50), lilac)
+            board.line([(79, 44), (224, 44)], ink, 7)
+            board.ellipse((650, 29, 678, 57), mint)
+            board.line([(27, 83), (693, 83)], '#ddd5df', 2)
+            board.rect((27, 106, 112, 439), ink, 16)
+            for y, color in ((127, lilac), (198, '#745c80'), (269, '#745c80')):
+                board.rect((49, y, 90, y+41), color, 11)
+            for index, color in enumerate((lilac, coral, mint)):
+                y = 109+index*110
+                board.rect((136, y, 691, y+91), '#eee8e4', 14)
+                board.rect((155, y+20, 204, y+70), color, 13)
+                board.line([(225, y+32), (440-index*32, y+32)], ink, 7)
+                board.line([(225, y+58), (387-index*26, y+58)], '#b9adbd', 5)
+                board.ellipse((600, y+27, 636, y+63), ink if index == 2 else '#d9cfde')
+                if index == 2:
+                    check(board, (609, y+36), 17, mint, 3)
+            scene.place(board, (433, 573), -4)
+            node = panel(142, 142, coral, 40)
+            node.rect((32, 44, 110, 105), ink, 20)
+            node.ellipse((50, 64, 62, 76), cream)
+            node.ellipse((80, 64, 92, 76), cream)
+            node.line([(71, 23), (71, 44)], ink, 5)
+            node.ellipse((65, 14, 77, 26), ink)
+            scene.place(node, (693, 290), 8)
+            note = panel(394, 154, lilac, 27)
+            note.ellipse((25, 26, 127, 128), ink)
+            check(note, (54, 61), 42, mint, 6)
+            note.line([(160, 59), (340, 59)], ink, 8)
+            note.line([(160, 93), (285, 93)], '#887397', 6)
+            scene.place(note, (523, 879), 6)
+            spark(112, 287, 31, lilac)
 
         elif n == 3:
             scene.ellipse((20, 290, 880, 1150), stroke='#b19cc8', width=2)
@@ -947,11 +968,13 @@ class Studio:
             scene.place(note, (568, 955), 7)
 
         image.place(scene, (450, 753), shadow=False)
-        text(image, (58, 51), brand, 38, foreground, weight=600)
-        text(image, (842, 62), f'{n:02} / {len(GALLERY_STUDIES):02}', 20, foreground, anchor='ra')
-        image.line([(58, 124), (842, 124)], foreground, 1)
-        text(image, (58, 1334), discipline, 20, foreground)
-        text(image, (842, 1375), 'UI CONCEPT', 16, foreground, anchor='ra')
+        # The two project entrances use selectable HTML headings and calls to action.
+        if n > 2:
+            text(image, (58, 51), brand, 38, foreground, weight=600)
+            text(image, (842, 62), f'{n:02} / {len(GALLERY_STUDIES):02}', 20, foreground, anchor='ra')
+            image.line([(58, 124), (842, 124)], foreground, 1)
+            text(image, (58, 1334), discipline, 20, foreground)
+            text(image, (842, 1375), 'UI CONCEPT', 16, foreground, anchor='ra')
         shadow = '<filter id="shadow" x="-35%" y="-35%" width="180%" height="190%"><feDropShadow dx="0" dy="18" stdDeviation="13" flood-color="#30203d" flood-opacity=".16"/></filter>'
         title = escape(f'{brand} / {discipline} — vector concept artwork')
         svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="title"><title id="title">{title}</title><defs>{shadow}{"".join(glyph_definitions.values())}</defs>{"".join(image.elements)}</svg>'
