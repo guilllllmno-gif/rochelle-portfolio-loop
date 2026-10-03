@@ -112,6 +112,8 @@
 .showcase-facts dt{font-size:13px}
 .showcase-facts dd{margin:0}
 .showcase-overlay .showcase-art-note{margin-top:32px;font-size:12px}
+.showcase-launch{width:100%;margin-top:24px;justify-content:space-between}
+.showcase-overlay .showcase-launch-hint{margin-top:12px;font-size:13px}
 .accordion-counter{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .accordion-track,.accordion-media{transition-property:none}
 @media(max-width:1023px){

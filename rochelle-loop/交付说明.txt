@@ -402,3 +402,12 @@ preview-brand-opening-sequence.jpg、preview-brand-hero-desktop.png、preview-br
 - 已检查 1568×900 桌面及 390×844 手机的两个入口、弹窗开关、键盘 Tab/Enter/Escape、焦点约束与返回，以及画廊 01/02/03/08 的切换。
 - 320×740 减少动态效果模式下八张完整展示，项目标题不溢出，入口箭头为 44×44 像素。Work 仍有十二个项目，原第一篇详情可正常进入。
 - 八张 SVG 均成功解析，无位图、脚本、SVG text 元素或外部链接；离线文件中八张 SVG 均解码成功，Artivo 简介可由入口打开。
+
+二十二、Artivo 实际入口接入
+- Artivo 简介新增“打开 Artivo”，指向 https://rochelle-design.vercel.app/projects，在新标签页打开并设置 noopener noreferrer；不使用访客自己的 localhost。
+- 首页八张封面及 Agent Workspace 入口保持不变。Artivo 的访问说明更新为“公网入口 · 管理员登录”，明确后端仍依赖本机服务和临时隧道，不宣称永久云部署或匿名体验。
+- 修复 Artivo 原公网 API 的 502：使用独立公网 API、预览及网关进程恢复连接，并重新部署已有 Vercel 项目。原本地开发 API、前端、worker、builder、数据库和项目资料未替换或清空。
+- 实际从作品集点击按钮打开 Artivo 登录页，新页 window.opener 为 null；使用既有管理员账户登录成功并进入 /projects，项目读取与会话检查返回 200，退出后会话检查返回 401。
+- 未登录读取项目返回 401；不匹配的 Origin 登录请求返回 403；会话 Cookie 保留 Secure 与 HttpOnly。未创建或修改项目，也未触发 AI 生成。
+- 已检查 1440×1000 桌面及 390×844 手机弹窗，无横向溢出，手机操作按钮高度 52 像素。预览为 preview-artivo-launch-desktop.png 与 preview-artivo-launch-mobile.png。
+- 离线单文件同步包含该入口；作品集本身仍可离线浏览，打开 Artivo 需要联网、现有管理员账户及在线的后端服务。
