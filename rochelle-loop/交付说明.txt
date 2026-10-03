@@ -376,3 +376,17 @@ preview-brand-opening-sequence.jpg、preview-brand-hero-desktop.png、preview-br
 - 实际验证：1568×798 桌面及 390×844 手机逐张切换九张封面，并反向返回；全部正常解码，无横向溢出或捕获到的页面脚本错误。
 - 手机点击第三张进入 Issuing, Explained 详情，浏览器返回后恢复第三张；减少动态效果模式下九张完整展开。
 - 离线单文件中的九张新图均以内嵌 WebP 加载并成功解码。本轮不修改首屏漂浮物件、页面布局或动效代码。
+
+二十、首页画廊 SVG 与文字精简（替代第十九节的首页素材方案）
+- 删除首页的 G-DORISE / A Character with Rules 人物卡片，精选画廊由九张改为八张；Work 列表和人物项目详情仍保留，未删除整个项目。
+- 首页数量说明及初始计数改为读取实际精选作品数量，滚动范围、逐张切换和返回恢复继续按实际卡片数计算。
+- 八张新素材为 assets/editorial/gallery-01.svg 至 gallery-08.svg，viewBox 均为 0 0 900 1440，合计 133,381 字节。
+- 所有图形均使用 SVG 几何元素，保留的文字通过 HarfBuzz 排版并由 FontTools 转为字形路径。没有将 WebP、PNG 等位图包入 SVG，也不依赖浏览器下载字体。
+- 删除长篇标语、大标题及说明句；主要保留品牌名、编号、分类和少量状态标签，用卡片、曲线、图表、图标及流程节点表达内容。
+- 已移除旧 gallery-01.webp 至 gallery-09.webp，离线单文件也不再打包这九张旧素材。其他页面使用的 cover 系列及人物原图不受影响。
+- 重新生成需要 Python 3、Pillow、fonttools、uharfbuzz，可通过 python3 -m pip install Pillow fonttools uharfbuzz 安装。
+- 在仓库根目录依次执行 python3 rochelle-loop/generate_editorial.py --gallery-only 和 python3 rochelle-loop/build.py，可重建 SVG 与离线单文件；网站本身不需要这些 Python 依赖。
+- preview-gallery-collection.jpg 已更新为八张总览；desktop、mobile 两张画廊预览同步更新，preview-gallery-vector-detail.png 为第三张 SVG 按四倍尺寸查看的局部截图。
+- 实际检查全部 SVG：无位图、外部资源或未转路径文字，内部图形引用完整。
+- 1568×798 桌面、390×844 手机逐张 01→08 并反向切换：计数正确、图片正常解码、无横向溢出或捕获到的页面脚本错误。
+- 手机点击第三张进入对应详情，返回恢复 03 / 08；减少动态效果模式完整展示八张。离线文件中的八张内嵌 SVG 均成功解码，人物卡片不再出现。

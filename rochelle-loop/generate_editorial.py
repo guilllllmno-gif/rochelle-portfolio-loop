@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rebuild supplied-image studies, gallery visuals and original paper/print artwork.
 
-Requires Python 3 and Pillow (python3 -m pip install Pillow).
+Requires Python 3, Pillow, fonttools and uharfbuzz (python3 -m pip install Pillow fonttools uharfbuzz).
 Usage: python3 generate_editorial.py '/path/to/untitled folder'
 Optional --output, --sans-font and --serif-font override package-local paths.
 Fonts are the bundled OFL Outfit and Fraunces source TTFs. No network required.
@@ -9,9 +9,12 @@ All interface data is illustrative; these are authored concept compositions.
 """
 from argparse import ArgumentParser
 from pathlib import Path
+from html import escape
+from io import BytesIO
+from itertools import count
 import math
 import random
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 W, H = 900, 1440
 CREAM = '#f5f1e6'
@@ -60,15 +63,14 @@ COVER_STUDIES = [
 
 # Homepage-only art; the shared Work and case-study covers remain unchanged.
 GALLERY_STUDIES = [
-    (('A clearer', 'overview.'), 'PRODUCT UI / OPERATIONS', '#e0d7ed'),
-    (('Every state,', 'understood.'), 'INTERACTION / STATUS SYSTEMS', '#f1ebdf'),
-    (('Small card.', 'Big possibility.'), 'PRODUCT STORY / ISSUING', '#cab8dc'),
-    (('A clear', 'next move.'), 'PRODUCT UI / RESOLUTION', '#f1c7b5'),
-    (('A clearer', 'way in.'), 'WEB DESIGN / PAYMENTS', '#2b1630'),
-    (('One idea.', 'Every screen.'), 'RESPONSIVE / WEB & MOBILE', '#dfd8e9'),
-    (('From here,', 'to there.'), 'INTERACTION / PAYMENT FLOWS', '#f5b994'),
-    (('Less noise.', 'More focus.'), 'PRODUCT UI / WORKSPACES', '#32203b'),
-    (('A character.', 'A whole world.'), 'CHARACTER / VISUAL SYSTEMS', '#eadbdc'),
+    ('OPERATIONS', '#e0d7ed'),
+    ('STATUS SYSTEMS', '#f1ebdf'),
+    ('ISSUING', '#cab8dc'),
+    ('CASE REVIEW', '#f1c7b5'),
+    ('PAYMENTS', '#2b1630'),
+    ('WEB & MOBILE', '#dfd8e9'),
+    ('PAYMENT FLOWS', '#f5b994'),
+    ('WORKSPACE', '#32203b'),
 ]
 
 
@@ -86,12 +88,49 @@ def save_webp(image, destination, quality=86, lossless=False):
 
 
 
+class SvgLayer:
+    """Small vector scene: geometry stays unfiltered; only silhouettes cast shadows."""
+
+    def __init__(self, width, height, identifiers, radius=0):
+        self.width, self.height = width, height
+        self.identifier = f'layer-{next(identifiers)}'
+        self.radius = radius
+        self.elements = []
+
+    def rect(self, box, fill='none', radius=0, stroke='none', width=1):
+        x, y, right, bottom = box
+        self.elements.append(f'<rect x="{x}" y="{y}" width="{right-x}" height="{bottom-y}" rx="{radius}" fill="{fill}" stroke="{stroke}" stroke-width="{width}"/>')
+
+    def ellipse(self, box, fill='none', stroke='none', width=1):
+        x, y, right, bottom = box
+        self.elements.append(f'<ellipse cx="{(x+right)/2}" cy="{(y+bottom)/2}" rx="{(right-x)/2}" ry="{(bottom-y)/2}" fill="{fill}" stroke="{stroke}" stroke-width="{width}"/>')
+
+    def line(self, points, color, width=1):
+        coordinates = ' '.join(f'{x},{y}' for x, y in points)
+        self.elements.append(f'<polyline points="{coordinates}" fill="none" stroke="{color}" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round"/>')
+
+    def path(self, data, fill='none', stroke='none', width=1):
+        self.elements.append(f'<path d="{data}" fill="{fill}" stroke="{stroke}" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round"/>')
+
+    def place(self, item, center, angle=0, shadow=True):
+        transform = f'translate({center[0]} {center[1]}) rotate({-angle}) translate({-item.width/2} {-item.height/2})'
+        silhouette = f'<g filter="url(#shadow)">{item.elements[0]}</g>' if shadow else ''
+        content = ''.join(item.elements)
+        if item.radius:
+            clip = f'<clipPath id="{item.identifier}-clip"><rect width="{item.width}" height="{item.height}" rx="{item.radius}"/></clipPath>'
+            content = f'<defs>{clip}</defs><g clip-path="url(#{item.identifier}-clip)">{content}</g>'
+        self.elements.append(f'<g transform="{transform}">{silhouette}<svg width="{item.width}" height="{item.height}" viewBox="0 0 {item.width} {item.height}" overflow="hidden">{content}</svg></g>')
+
+
 class Studio:
     def __init__(self, output, sans, serif):
         self.output = output
         self.sans = sans
         self.serif = serif
         self.fonts = {}
+        self.vector_face = None
+        self.vector_styles = {}
+        self.vector_paths = {}
 
     def font(self, size, italic=False, weight=450):
         key = size, italic, weight
@@ -619,31 +658,73 @@ class Studio:
         save_webp(image.convert('RGB'), self.output/f'cover-{n:02}.webp', 93)
 
     def gallery_cover(self, n):
-        """Compose project-led homepage art from bundled fonts and illustration."""
-        headings, discipline, background = GALLERY_STUDIES[n-1]
+        """Render eight text-light SVG covers; all lettering is shaped and outlined."""
+        import uharfbuzz as hb
+        from fontTools.ttLib import TTFont
+        from fontTools.pens.svgPathPen import SVGPathPen
+
+        if self.vector_face is None:
+            data = self.sans.read_bytes()
+            self.vector_face = TTFont(BytesIO(data)), hb.Face(data)
+        font, face = self.vector_face
+        glyph_definitions = {}
+        discipline, background = GALLERY_STUDIES[n-1]
         brand, _ = COVERS[n-1]
         ink, cream, coral, lilac, mint = '#2b1630', '#faf6ec', '#f47a50', '#c5b8e9', '#d9e5b5'
         foreground = cream if n in (5, 8) else ink
-        image = Image.new('RGBA', (W, H), background)
-        scene = Image.new('RGBA', (900, 900))
-        draw = ImageDraw.Draw(scene)
+        identifiers = count()
+        image = SvgLayer(W, H, identifiers)
+        image.rect((0, 0, W, H), background)
+        scene = SvgLayer(900, 1070, identifiers)
 
-        def panel(width, height, fill=cream, radius=28):
-            item = Image.new('RGBA', (width, height))
-            ImageDraw.Draw(item).rounded_rectangle((0, 0, width-1, height-1), radius, fill=fill)
+        def text(target, xy, words, size=24, fill=ink, weight=500, anchor='la'):
+            if weight not in self.vector_styles:
+                shaper = hb.Font(face)
+                shaper.scale = face.upem, face.upem
+                shaper.set_variations({'wght': weight})
+                glyph_set = font.getGlyphSet(location={'wght': weight})
+                self.vector_styles[weight] = shaper, glyph_set, font.getGlyphOrder()
+            shaper, glyph_set, glyph_order = self.vector_styles[weight]
+            buffer = hb.Buffer()
+            buffer.add_str(words)
+            buffer.guess_segment_properties()
+            hb.shape(shaper, buffer)
+            scale = size/face.upem
+            advance = sum(position.x_advance for position in buffer.glyph_positions)*scale
+            x, y = xy
+            if anchor == 'ra':
+                x -= advance
+            elif anchor == 'ma':
+                x -= advance/2
+            baseline = y+self.font(size, weight=weight).getmetrics()[0]
+            uses, cursor = [], 0
+            for info, position in zip(buffer.glyph_infos, buffer.glyph_positions):
+                key = weight, info.codepoint
+                identifier = f'g-{weight}-{info.codepoint}'
+                if key not in self.vector_paths:
+                    pen = SVGPathPen(glyph_set, ntos=lambda value: f'{value:.2f}'.rstrip('0').rstrip('.'))
+                    glyph_set[glyph_order[info.codepoint]].draw(pen)
+                    self.vector_paths[key] = pen.getCommands()
+                path = self.vector_paths[key]
+                if path:
+                    glyph_definitions[identifier] = f'<path id="{identifier}" d="{path}"/>'
+                    uses.append(f'<use href="#{identifier}" transform="translate({cursor+position.x_offset} {position.y_offset})"/>')
+                cursor += position.x_advance
+            target.elements.append(f'<g fill="{fill}" transform="translate({x:.3f} {baseline:.3f}) scale({scale:.6f} {-scale:.6f})">{"".join(uses)}</g>')
+
+        def panel(width, height, fill=cream, radius=30):
+            item = SvgLayer(width, height, identifiers, radius)
+            item.rect((0, 0, width, height), fill, radius)
             return item
 
-        def arrow(target, xy, size, color, width=8):
+        def arrow(target, xy, size, color=ink, width=9):
             x, y = xy
-            d = ImageDraw.Draw(target)
-            d.line((x, y+size, x+size, y), fill=color, width=width)
-            d.line((x, y, x+size, y, x+size, y+size), fill=color, width=width, joint='curve')
+            target.line([(x, y+size), (x+size, y)], color, width)
+            target.line([(x, y), (x+size, y), (x+size, y+size)], color, width)
 
-        def chip(target, xy, label, fill, color=ink, size=20):
+        def check(target, xy, size, color, width=6):
             x, y = xy
-            width = round(self.font(size, weight=500).getlength(label))+36
-            ImageDraw.Draw(target).rounded_rectangle((x, y, x+width, y+42), 21, fill=fill)
-            self.text(target, (x+18, y+8), label, size, color, weight=500)
+            target.line([(x, y+size*.55), (x+size*.35, y+size), (x+size, y)], color, width)
 
         def spark(x, y, radius, color):
             points = []
@@ -651,232 +732,232 @@ class Studio:
                 angle = index*math.pi/4
                 length = radius if index % 2 == 0 else radius*.25
                 points.append((x+math.cos(angle)*length, y+math.sin(angle)*length))
-            draw.polygon(points, fill=color)
+            scene.path('M'+' L'.join(f'{x:.2f} {y:.2f}' for x, y in points)+' Z', color)
 
         if n == 1:
-            draw.ellipse((420, 65, 940, 585), fill=coral)
-            draw.arc((-170, 270, 530, 970), 210, 355, fill='#b5a4c8', width=2)
-            board = panel(710, 540)
-            d = ImageDraw.Draw(board)
-            self.text(board, (36, 28), 'Future Pay', 24, ink, weight=600)
-            chip(board, (528, 25), 'Concept UI', '#e9e2f0', size=16)
-            d.line((36, 86, 674, 86), fill='#e1d9d2', width=2)
-            self.text(board, (36, 109), 'A little more perspective.', 34, ink, weight=500)
-            self.text(board, (36, 166), 'PAYMENT ACTIVITY', 16, '#807186')
-            d.rounded_rectangle((36, 209, 438, 466), 18, fill='#eee8f3')
-            heights = [76, 114, 90, 160, 131, 184, 151]
-            for index, height in enumerate(heights):
-                x = 67+index*49
-                d.rounded_rectangle((x, 430-height, x+28, 430), 8, fill=coral if index == 5 else '#a694bd')
-            self.text(board, (476, 221), 'In one place', 24, ink, weight=500)
-            for index, label in enumerate(('Overview', 'Transactions', 'To review')):
-                y = 285+index*66
-                d.ellipse((476, y+5, 488, y+17), fill=(ink, coral, '#a694bd')[index])
-                self.text(board, (505, y), label, 21, '#73637a')
-            self.place(scene, board, (420, 384), 5)
-            note = panel(420, 154, ink)
-            self.text(note, (30, 24), 'Everything.', 38, cream, weight=500)
-            self.text(note, (30, 72), 'In context.', 37, lilac, italic=True)
-            arrow(note, (322, 57), 48, coral, 6)
-            self.place(scene, note, (565, 718), -7)
+            scene.ellipse((420, 0, 1020, 600), coral)
+            scene.ellipse((-180, 360, 580, 1120), stroke='#b5a4c8', width=2)
+            board = panel(730, 656)
+            text(board, (38, 35), 'Overview', 35)
+            for x in (614, 638, 662):
+                board.ellipse((x, 52, x+9, 61), '#baa9c5')
+            board.line([(38, 104), (692, 104)], '#e1d9d2', 2)
+            board.rect((38, 139, 326, 254), '#ece4f3', 20)
+            board.rect((346, 139, 692, 254), '#f4dac9', 20)
+            board.line([(62, 220), (110, 190), (160, 205), (209, 170), (285, 171)], '#8f76a6', 4)
+            board.line([(376, 215), (430, 209), (481, 176), (534, 189), (606, 161), (659, 172)], '#c37752', 4)
+            board.rect((38, 282, 468, 610), '#eee8f3', 20)
+            for index, height in enumerate((103, 156, 130, 213, 177, 254, 207)):
+                x = 67+index*54
+                board.rect((x, 575-height, x+32, 575), coral if index == 5 else '#a694bd', 9)
+            for index, color in enumerate((ink, coral, lilac)):
+                y = 306+index*103
+                board.ellipse((510, y, 552, y+42), color)
+                board.line([(575, y+12), (665, y+12)], '#b9acbd', 6)
+                board.line([(575, y+31), (634, y+31)], '#ddd4df', 6)
+            scene.place(board, (430, 433), 5)
+            note = panel(422, 176, ink)
+            note.ellipse((30, 34, 138, 142), stroke=lilac, width=12)
+            check(note, (61, 70), 44, mint, 7)
+            note.line([(184, 62), (323, 62)], cream, 9)
+            note.line([(184, 97), (272, 97)], '#9e86ad', 7)
+            arrow(note, (340, 113), 33, coral, 5)
+            scene.place(note, (557, 874), -7)
 
         elif n == 2:
-            draw.line([(214, 118), (665, 118), (665, 731), (215, 731)], fill='#ded3e5', width=48, joint='curve')
+            scene.line([(210, 111), (690, 111), (690, 943), (210, 943)], '#ded3e5', 43)
             states = [
-                ('Processing', 'A moment of movement.', lilac, ink, (410, 245), 7),
-                ('Completed', 'A clear confirmation.', ink, cream, (485, 446), -5),
-                ('Needs review', 'A next step, not a dead end.', coral, ink, (406, 651), 6),
+                ('Processing', lilac, ink, (410, 257), 7),
+                ('Completed', ink, cream, (480, 546), -5),
+                ('Review', coral, ink, (410, 833), 6),
             ]
-            for index, (label, detail, fill, color, center, angle) in enumerate(states):
-                item = panel(634, 165, fill, 38)
-                d = ImageDraw.Draw(item)
-                d.ellipse((28, 37, 116, 125), outline=color, width=2)
+            for index, (label, fill, color, center, angle) in enumerate(states):
+                item = panel(654, 188, fill, 42)
+                item.ellipse((33, 43, 135, 145), stroke=color, width=2)
                 if index == 0:
-                    d.arc((52, 61, 92, 101), 15, 285, fill=color, width=5)
+                    item.path('M101 69 A30 30 0 1 0 106 113', stroke=color, width=6)
                 elif index == 1:
-                    d.line((52, 82, 67, 97, 94, 67), fill=color, width=5, joint='curve')
+                    check(item, (61, 76), 48, color, 6)
                 else:
-                    self.text(item, (70, 51), '!', 43, color, weight=600, anchor='ma')
-                self.text(item, (145, 31), label, 40, color, weight=500)
-                self.text(item, (146, 89), detail, 21, color)
-                self.place(scene, item, center, angle)
-            spark(732, 770, 42, ink)
+                    item.line([(84, 67), (84, 101)], color, 6)
+                    item.ellipse((80, 116, 88, 124), color)
+                text(item, (165, 61), label, 45, color)
+                scene.place(item, center, angle)
+            spark(756, 1020, 35, ink)
 
         elif n == 3:
-            draw.ellipse((32, 146, 868, 982), outline='#b19cc8', width=2)
-            draw.ellipse((92, 206, 808, 922), outline='#b19cc8', width=2)
-            back = panel(650, 404, coral, 35)
-            self.text(back, (40, 31), 'Future Pay', 30, ink, weight=600)
-            arrow(back, (511, 43), 60, ink, 7)
-            self.text(back, (40, 265), 'A new perspective.', 47, ink, italic=True)
-            self.place(scene, back, (430, 298), 14)
-            card = panel(658, 412, ink, 35)
-            d = ImageDraw.Draw(card)
+            scene.ellipse((20, 290, 880, 1150), stroke='#b19cc8', width=2)
+            scene.ellipse((80, 350, 820, 1090), stroke='#b19cc8', width=2)
+            back = panel(650, 408, coral, 35)
+            back.ellipse((344, 46, 620, 322), stroke=ink, width=2)
+            back.ellipse((385, 87, 579, 281), stroke=ink, width=2)
+            arrow(back, (52, 50), 74, ink, 8)
+            scene.place(back, (425, 315), 14)
+            card = panel(662, 422, ink, 35)
+            text(card, (43, 36), 'Future Pay', 29, cream, weight=600)
             for offset in range(0, 192, 32):
-                d.arc((372+offset, -162, 848+offset, 404), 70, 270, fill='#6e5179', width=2)
-            self.text(card, (42, 33), 'Future Pay', 30, cream, weight=600)
-            self.text(card, (42, 124), 'Make room.', 62, cream, weight=500)
-            self.text(card, (44, 200), 'for possibility.', 43, lilac, italic=True)
-            d.rounded_rectangle((44, 290, 119, 344), 11, fill='#ddd1a4')
-            d.line((69, 290, 69, 344), fill='#9e9270', width=2)
-            d.line((94, 290, 94, 344), fill='#9e9270', width=2)
-            d.line((44, 317, 119, 317), fill='#9e9270', width=2)
-            self.text(card, (152, 311), '••••  ••••', 27, cream)
-            self.text(card, (613, 359), 'CONCEPT / 03', 16, lilac, anchor='ra')
-            self.place(scene, card, (473, 474), -12)
-            controls = panel(484, 140)
-            self.text(controls, (29, 26), 'On your terms.', 31, ink, weight=500)
-            self.text(controls, (30, 76), 'Thoughtful card controls', 20, '#79667e')
-            d = ImageDraw.Draw(controls)
-            d.rounded_rectangle((367, 47, 453, 93), 23, fill=ink)
-            d.ellipse((413, 53, 447, 87), fill=mint)
-            self.place(scene, controls, (434, 756), 4)
+                card.path(f'M{590+offset} -20 C{382+offset} 94 {382+offset} 304 {590+offset} 447', stroke='#6e5179', width=2)
+            card.rect((45, 161, 143, 231), '#ddd1a4', 12)
+            card.line([(78, 161), (78, 231)], '#9e9270', 2)
+            card.line([(110, 161), (110, 231)], '#9e9270', 2)
+            card.line([(45, 196), (143, 196)], '#9e9270', 2)
+            for offset in (0, 14, 28):
+                card.path(f'M{182+offset} {174-offset/2} Q{204+offset} 196 {182+offset} {218+offset/2}', stroke=lilac, width=3)
+            for group in range(4):
+                for dot in range(4):
+                    x = 50+group*105+dot*18
+                    card.ellipse((x, 309, x+7, 316), cream)
+            card.line([(47, 367), (183, 367)], '#9e86ad', 6)
+            scene.place(card, (474, 574), -12)
+            controls = panel(474, 144)
+            controls.path('M44 64 V48 A18 18 0 0 1 80 48 V64', stroke=ink, width=4)
+            controls.rect((35, 62, 89, 108), lilac, 11)
+            controls.line([(124, 63), (260, 63)], '#95809f', 7)
+            controls.line([(124, 91), (214, 91)], '#d4c7db', 6)
+            controls.rect((353, 46, 443, 98), ink, 26)
+            controls.ellipse((395, 53, 435, 93), mint)
+            scene.place(controls, (440, 948), 4)
 
         elif n == 4:
-            draw.rounded_rectangle((85, 175, 823, 670), 170, outline='#d99d8b', width=2)
-            sheet = panel(610, 665)
-            d = ImageDraw.Draw(sheet)
-            chip(sheet, (37, 31), 'CASE REVIEW', '#eadff0', size=17)
-            self.text(sheet, (37, 104), 'A way forward.', 46, ink, weight=500)
-            self.text(sheet, (38, 171), 'Keep the important things close.', 23, '#79667e')
-            d.line((63, 269, 63, 456), fill='#d6c8df', width=3)
-            for index, label in enumerate(('Keep the context', 'Review the evidence', 'Choose the next step')):
-                y = 241+index*100
-                d.ellipse((39, y, 88, y+49), fill=ink if index == 2 else '#e7ddef')
-                self.text(sheet, (64, y+9), str(index+1), 25, cream if index == 2 else ink, anchor='ma')
-                self.text(sheet, (111, y+8), label, 28, ink, weight=450)
-            d.rounded_rectangle((37, 552, 573, 624), 18, fill=ink)
-            self.text(sheet, (62, 570), 'Review details', 25, cream, weight=500)
-            arrow(sheet, (511, 575), 26, cream, 4)
-            self.place(scene, sheet, (452, 436), -5)
-            spark(737, 145, 56, ink)
-            note = panel(327, 98, coral, 24)
-            self.text(note, (27, 29), 'Clarity over clutter.', 28, ink, italic=True)
-            self.place(scene, note, (591, 782), 7)
+            scene.rect((75, 244, 835, 852), radius=190, stroke='#d99d8b', width=2)
+            sheet = panel(610, 744)
+            text(sheet, (38, 37), 'Review', 39)
+            sheet.ellipse((506, 38, 568, 100), lilac)
+            check(sheet, (524, 57), 25, ink, 4)
+            sheet.line([(38, 132), (572, 132)], '#e0d5db', 2)
+            sheet.line([(67, 217), (67, 491)], '#d6c8df', 3)
+            for index in range(3):
+                y = 191+index*130
+                sheet.ellipse((40, y, 94, y+54), ink if index == 2 else '#e7ddef')
+                if index < 2:
+                    check(sheet, (56, y+18), 22, ink, 4)
+                else:
+                    arrow(sheet, (57, y+17), 20, cream, 3)
+                sheet.line([(124, y+15), (455-index*35, y+15)], '#8d7897', 9)
+                sheet.line([(124, y+43), (352+index*33, y+43)], '#d9cedd', 7)
+            sheet.rect((38, 611, 572, 698), ink, 22)
+            arrow(sheet, (492, 637), 33, cream, 5)
+            scene.place(sheet, (450, 514), -5)
+            spark(749, 155, 52, ink)
+            note = panel(272, 116, coral, 24)
+            note.ellipse((25, 27, 85, 87), ink)
+            check(note, (43, 47), 24, cream, 4)
+            note.line([(114, 44), (228, 44)], ink, 7)
+            note.line([(114, 74), (190, 74)], '#b45636', 5)
+            scene.place(note, (598, 948), 7)
 
         elif n == 5:
-            draw.ellipse((408, 30, 1008, 630), fill='#553b60')
-            draw.arc((-210, 229, 611, 1050), 200, 355, fill='#775a80', width=2)
-            site = panel(720, 577)
-            d = ImageDraw.Draw(site)
-            self.text(site, (36, 27), 'Bit2Go', 29, ink, weight=600)
-            chip(site, (545, 29), 'Explore ↗', ink, cream, 17)
-            d.line((35, 89, 685, 89), fill='#ded5d5', width=2)
-            self.text(site, (36, 132), 'Payments,', 58, ink, weight=500)
-            self.text(site, (39, 201), 'made human.', 52, ink, italic=True)
-            self.text(site, (38, 294), 'A simpler starting point.', 24, '#79667e')
-            chip(site, (37, 354), 'Meet the concept  →', lilac, size=21)
-            d.ellipse((443, 306, 689, 552), fill=coral)
-            arrow(site, (507, 373), 109, ink, 15)
-            self.place(scene, site, (451, 418), 7)
-            ring = Image.new('RGBA', (244, 244))
-            ImageDraw.Draw(ring).ellipse((18, 18, 226, 226), outline=lilac, width=44)
-            self.place(scene, ring, (187, 743), -8)
-            spark(732, 760, 52, coral)
+            scene.ellipse((403, 74, 1023, 694), '#553b60')
+            scene.ellipse((-214, 417, 596, 1227), stroke='#775a80', width=2)
+            site = panel(724, 657)
+            text(site, (37, 30), 'Bit2Go', 30, weight=600)
+            site.rect((569, 33, 680, 75), ink, 21)
+            arrow(site, (629, 46), 15, cream, 3)
+            site.line([(37, 108), (686, 108)], '#ded5d5', 2)
+            site.line([(40, 187), (331, 187)], ink, 22)
+            site.line([(40, 239), (272, 239)], '#b7a5c4', 22)
+            site.line([(40, 305), (241, 305)], '#d5c7dc', 8)
+            site.rect((38, 375, 232, 432), lilac, 28)
+            arrow(site, (175, 392), 22, ink, 4)
+            site.ellipse((362, 281, 689, 608), coral)
+            arrow(site, (444, 369), 145, ink, 17)
+            scene.place(site, (451, 502), 7)
+            ring = SvgLayer(244, 244, identifiers)
+            ring.ellipse((22, 22, 222, 222), stroke=lilac, width=43)
+            scene.place(ring, (181, 932), -8)
+            spark(731, 954, 50, coral)
 
         elif n == 6:
-            draw.ellipse((40, 50, 875, 885), fill='#c9bbda')
-            desktop = panel(710, 472, ink, 23)
-            d = ImageDraw.Draw(desktop)
-            d.rounded_rectangle((12, 12, 698, 460), 16, fill=cream)
-            self.text(desktop, (35, 27), 'Bit2Go', 24, ink, weight=600)
-            d.line((35, 78, 673, 78), fill='#dfd5dc', width=2)
-            self.text(desktop, (37, 119), 'Good things', 52, ink, weight=500)
-            self.text(desktop, (40, 181), 'flow together.', 44, ink, italic=True)
-            chip(desktop, (38, 289), 'Explore the idea  ↗', ink, cream, 20)
-            d.rounded_rectangle((461, 113, 671, 411), 100, fill=lilac)
-            arrow(desktop, (514, 224), 92, ink, 11)
-            self.place(scene, desktop, (389, 337), 6)
-            phone = panel(248, 473, ink, 42)
-            d = ImageDraw.Draw(phone)
-            d.rounded_rectangle((10, 10, 238, 463), 33, fill=cream)
-            d.rounded_rectangle((83, 19, 165, 35), 8, fill=ink)
-            self.text(phone, (30, 70), 'Bit2Go', 23, ink, weight=600)
-            self.text(phone, (28, 120), 'Made for', 31, ink, weight=500)
-            self.text(phone, (29, 163), 'your world.', 28, ink, italic=True)
-            d.rounded_rectangle((28, 232, 220, 366), 22, fill=coral)
-            arrow(phone, (95, 269), 58, ink, 8)
-            d.rounded_rectangle((28, 391, 220, 434), 21, fill=ink)
-            self.text(phone, (124, 401), 'Explore  ↗', 18, cream, anchor='ma')
-            self.place(scene, phone, (648, 611), -9)
-            spark(194, 731, 49, ink)
+            scene.ellipse((30, 157, 870, 997), '#c9bbda')
+            desktop = panel(710, 513, ink, 24)
+            desktop.rect((12, 12, 698, 501), cream, 17)
+            desktop.ellipse((35, 30, 67, 62), coral)
+            desktop.line([(36, 98), (674, 98)], '#dfd5dc', 2)
+            desktop.line([(40, 169), (359, 169)], ink, 20)
+            desktop.line([(40, 215), (285, 215)], '#b09abd', 20)
+            desktop.line([(40, 278), (239, 278)], '#dbd0e1', 7)
+            desktop.rect((38, 346, 243, 401), ink, 27)
+            arrow(desktop, (186, 363), 22, cream, 4)
+            desktop.rect((451, 134, 673, 459), lilac, 110)
+            arrow(desktop, (504, 249), 107, ink, 12)
+            scene.place(desktop, (386, 419), 6)
+            phone = panel(255, 499, ink, 43)
+            phone.rect((10, 10, 245, 489), cream, 34)
+            phone.rect((84, 19, 171, 36), ink, 9)
+            phone.ellipse((29, 73, 57, 101), coral)
+            phone.line([(30, 147), (201, 147)], ink, 12)
+            phone.line([(30, 180), (159, 180)], '#b09abd', 12)
+            phone.rect((28, 232, 227, 389), coral, 24)
+            arrow(phone, (92, 280), 69, ink, 9)
+            phone.rect((28, 417, 227, 461), ink, 22)
+            arrow(phone, (179, 431), 15, cream, 3)
+            scene.place(phone, (649, 757), -9)
+            spark(180, 944, 48, ink)
 
         elif n == 7:
-            draw.line([(168, 158), (729, 158), (729, 424), (170, 424), (170, 718), (641, 718)], fill='#dc946e', width=3, joint='curve')
+            scene.line([(164, 167), (735, 167), (735, 530), (170, 530), (170, 920), (642, 920)], '#dc946e', 3)
             steps = [
-                ('Set up.', 'A clear starting point.', cream, ink, (355, 191), 6),
-                ('Review.', 'The right context, together.', ink, cream, (533, 439), -5),
-                ('Ready to go.', 'A considered next step.', cream, ink, (367, 690), 5),
+                ('Set up', cream, ink, (354, 235), 6),
+                ('Review', ink, cream, (526, 548), -5),
+                ('Done', cream, ink, (364, 865), 5),
             ]
-            for index, (label, subtitle, fill, color, center, angle) in enumerate(steps):
-                item = panel(562, 181, fill, 28)
-                d = ImageDraw.Draw(item)
-                d.rounded_rectangle((24, 27, 124, 154), 20, fill=lilac if index == 1 else '#e7ddf0')
-                self.text(item, (73, 61), f'0{index+1}', 44, ink, weight=500, anchor='ma')
-                self.text(item, (154, 34), label, 40, color, weight=500)
-                self.text(item, (154, 98), subtitle, 21, color)
-                self.place(scene, item, center, angle)
-            spark(741, 739, 42, ink)
-
-        elif n == 8:
-            for radius in (235, 310, 385):
-                draw.ellipse((445-radius, 467-radius, 445+radius, 467+radius), outline='#62486e', width=2)
-            board = panel(681, 607)
-            d = ImageDraw.Draw(board)
-            self.text(board, (34, 25), 'Bit2Go / Workspace', 25, ink, weight=550)
-            d.ellipse((610, 30, 640, 60), fill=coral)
-            d.line((33, 89, 648, 89), fill='#e4d9de', width=2)
-            self.text(board, (33, 118), 'Room to focus.', 43, ink, weight=500)
-            for index, label in enumerate(('Overview', 'Activity', 'To review')):
-                chip(board, (34+index*205, 190), label, '#e9e1ef' if index == 0 else '#f1ece2', size=19)
-            d.rounded_rectangle((34, 267, 647, 416), 20, fill=ink)
-            self.text(board, (58, 289), 'A quieter kind of clarity.', 28, cream, italic=True)
-            points = [(63, 378), (152, 362), (226, 373), (301, 349), (377, 357), (455, 329), (535, 336), (617, 314)]
-            d.line(points, fill=lilac, width=4, joint='curve')
-            for index, label in enumerate(('Recent activity', 'Saved views')):
-                y = 451+index*70
-                d.ellipse((36, y+4, 68, y+36), fill=coral if index == 0 else lilac)
-                self.text(board, (85, y+4), label, 24, ink)
-                d.rounded_rectangle((483, y+11, 644, y+25), 7, fill='#e5dbea')
-            self.place(scene, board, (437, 402), -5)
-            note = panel(380, 116, lilac)
-            self.text(note, (31, 32), 'Less, but better.', 39, ink, italic=True)
-            self.place(scene, note, (588, 765), 7)
+            for index, (label, fill, color, center, angle) in enumerate(steps):
+                item = panel(571, 208, fill, 30)
+                item.rect((25, 28, 171, 180), lilac if index == 1 else '#e7ddf0', 25)
+                if index == 0:
+                    item.ellipse((80, 57, 118, 95), stroke=ink, width=4)
+                    item.path('M62 144 C62 99 136 99 136 144', stroke=ink, width=4)
+                elif index == 1:
+                    for y in (66, 103, 140):
+                        item.rect((61, y-8, 78, y+9), radius=3, stroke=ink, width=3)
+                        item.line([(95, y), (135, y)], ink, 4)
+                else:
+                    check(item, (66, 81), 65, ink, 8)
+                text(item, (210, 73), label, 43, color)
+                scene.place(item, center, angle)
+            spark(756, 1000, 40, ink)
 
         else:
-            draw.ellipse((99, 53, 801, 855), outline='#c6aebd', width=2)
-            draw.ellipse((135, 89, 765, 819), outline='#c6aebd', width=2)
-            source = Path(__file__).resolve().parent/'assets/editorial/portrait-studio.webp'
-            portrait = ImageOps.fit(Image.open(source).convert('RGBA'), (550, 690),
-                                    Image.Resampling.LANCZOS, centering=(.5, .32))
-            mask = Image.new('L', portrait.size)
-            mask_draw = ImageDraw.Draw(mask)
-            mask_draw.rounded_rectangle((0, 0, 550, 690), 275, fill=255)
-            mask_draw.rectangle((0, 335, 550, 690), fill=255)
-            portrait.putalpha(mask)
-            self.place(scene, portrait, (450, 426), -4)
-            spark(726, 119, 68, ink)
-            note = panel(375, 125, ink)
-            self.text(note, (28, 23), 'A little personality.', 32, cream, italic=True)
-            self.text(note, (30, 78), 'ROOM TO BE YOURSELF', 17, lilac)
-            self.place(scene, note, (334, 772), 6)
-            for index, color in enumerate((lilac, coral, cream)):
-                x = 615+index*44
-                draw.ellipse((x, 706, x+65, 771), fill=color, outline=ink, width=2)
+            for radius in (270, 350, 430):
+                scene.ellipse((445-radius, 566-radius, 445+radius, 566+radius), stroke='#62486e', width=2)
+            board = panel(690, 745)
+            text(board, (36, 35), 'Workspace', 35, weight=550)
+            board.ellipse((613, 42, 649, 78), coral)
+            board.line([(36, 114), (654, 114)], '#e4d9de', 2)
+            for index in range(3):
+                x = 36+index*213
+                board.rect((x, 148, x+190, 196), lilac if index == 0 else '#eee6e0', 24)
+            board.rect((36, 237, 654, 462), ink, 23)
+            for y in (290, 347, 407):
+                board.line([(64, y), (626, y)], '#614b6e', 1)
+            board.line([(64, 420), (143, 390), (223, 403), (306, 345), (386, 357), (467, 306), (542, 321), (622, 278)], lilac, 5)
+            board.ellipse((614, 270, 630, 286), mint)
+            for index in range(3):
+                y = 507+index*70
+                board.ellipse((38, y, 76, y+38), coral if index == 0 else lilac)
+                board.line([(101, y+11), (298, y+11)], '#a592b0', 7)
+                board.line([(101, y+30), (235, y+30)], '#d9cedd', 6)
+                board.rect((495, y+10, 650, y+28), '#e5dbea', 9)
+            scene.place(board, (435, 493), -5)
+            note = panel(397, 132, lilac)
+            for index, height in enumerate((29, 50, 70, 43, 80)):
+                x = 36+index*43
+                note.rect((x, 103-height, x+23, 103), ink, 7)
+            arrow(note, (310, 43), 40, ink, 6)
+            scene.place(note, (568, 955), 7)
 
-        image.alpha_composite(scene, (0, 410))
-        self.text(image, (57, 51), brand.upper(), 25, foreground, weight=600)
-        self.text(image, (843, 56), f'SELECTED / {n:02}', 18, foreground, anchor='ra')
-        ImageDraw.Draw(image).line((58, 113, 842, 113), fill=foreground, width=1)
-        size = 108
-        while max(self.font(size, italic=index == 1).getlength(line)
-                  for index, line in enumerate(headings)) > 790:
-            size -= 1
-        self.lines(image, (53, 153), headings, size, foreground, leading=1.04)
-        self.text(image, (58, 1344), discipline, 18, foreground, weight=500)
-        self.text(image, (58, 1381), 'SELF-DIRECTED CONCEPT', 16, foreground)
-        self.text(image, (842, 1370), 'R.', 39, foreground, italic=True, anchor='ra')
-        save_webp(image.convert('RGB'), self.output/f'gallery-{n:02}.webp', 90)
+        image.place(scene, (450, 753), shadow=False)
+        text(image, (58, 51), brand, 38, foreground, weight=600)
+        text(image, (842, 62), f'{n:02} / {len(GALLERY_STUDIES):02}', 20, foreground, anchor='ra')
+        image.line([(58, 124), (842, 124)], foreground, 1)
+        text(image, (58, 1334), discipline, 20, foreground)
+        text(image, (842, 1375), 'UI CONCEPT', 16, foreground, anchor='ra')
+        shadow = '<filter id="shadow" x="-35%" y="-35%" width="180%" height="190%"><feDropShadow dx="0" dy="18" stdDeviation="13" flood-color="#30203d" flood-opacity=".16"/></filter>'
+        title = escape(f'{brand} / {discipline} — vector concept artwork')
+        svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="title"><title id="title">{title}</title><defs>{shadow}{"".join(glyph_definitions.values())}</defs>{"".join(image.elements)}</svg>'
+        destination = self.output/f'gallery-{n:02}.svg'
+        destination.write_text(svg, encoding='utf-8')
+        print(f'{destination.name}: vector geometry and outlined text; {destination.stat().st_size:,} bytes')
 
 
 def footer_art(studio):
@@ -1000,7 +1081,7 @@ def main():
     parser.add_argument('--footer-only',action='store_true',help='Generate five flat colour typographic footer designs using bundled fonts')
     parser.add_argument('--collage-only',action='store_true',help='Generate original paper collages using only bundled fonts')
     parser.add_argument('--covers-only',action='store_true',help='Generate twelve mixed-media collage covers and transparent source artworks')
-    parser.add_argument('--gallery-only',action='store_true',help='Generate nine project-led homepage covers without changing Work or case-study assets')
+    parser.add_argument('--gallery-only',action='store_true',help='Generate eight text-light SVG homepage covers without changing Work or case-study assets')
     args=parser.parse_args()
     if args.gallery_only:
         args.output.mkdir(parents=True,exist_ok=True)
